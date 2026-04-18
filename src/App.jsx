@@ -359,13 +359,6 @@ function App() {
 
         <section className="app-preview">
           <div className="app-preview-inner">
-            <div className="app-preview-head">
-              <p className="app-preview-label">Preview social</p>
-              <p className="app-preview-copy">
-                Veja exatamente como seu post vai sair antes de baixar.
-              </p>
-            </div>
-
             <MemeCard
               ref={cardRef}
               imageSrc={previewUrl}
