@@ -79,19 +79,7 @@ function App() {
     return () => window.clearInterval(intervalId)
   }, [status])
 
-  useEffect(() => {
-    return () => {
-      if (previewUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(previewUrl)
-      }
-    }
-  }, [previewUrl])
-
   const resetFlow = () => {
-    if (previewUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(previewUrl)
-    }
-
     setStatus('idle')
     setPreviewUrl('')
     setPhrase('')
@@ -134,15 +122,9 @@ function App() {
     setError('')
     setPhrase('')
 
-    const localPreview = URL.createObjectURL(file)
+    const localPreview = await fileToDataUrl(file)
 
-    setPreviewUrl((current) => {
-      if (current.startsWith('blob:')) {
-        URL.revokeObjectURL(current)
-      }
-
-      return localPreview
-    })
+    setPreviewUrl(localPreview)
 
     try {
       setStatus('loading')
@@ -185,6 +167,7 @@ function App() {
       const dataUrl = await toPng(cardRef.current, {
         cacheBust: true,
         pixelRatio: 2,
+        skipFonts: true,
       })
 
       const link = document.createElement('a')
