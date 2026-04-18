@@ -52,10 +52,15 @@
   color: #fff;
 }
 
+.meme-card__top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
 .meme-card__tap-hint {
   display: flex;
-  justify-content: center;
-  margin-top: 0.85rem;
+  justify-content: flex-start;
 }
 
 .meme-card__tap-pill {
@@ -89,24 +94,69 @@
   backdrop-filter: blur(8px);
 }
 
-.meme-card__center {
+.meme-card__stage {
   display: flex;
   flex: 1;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1.5rem 0 1.1rem;
+}
+
+.meme-card__caption-wrap {
+  display: flex;
+  width: 100%;
+  align-items: flex-end;
+}
+
+.meme-card__caption-card {
+  display: flex;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 1.7rem;
+  background:
+    linear-gradient(180deg, rgba(32, 24, 19, 0.44) 0%, rgba(16, 12, 10, 0.7) 100%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px);
+}
+
+.meme-card__caption-icon {
+  display: flex;
+  flex-shrink: 0;
+  width: 2.6rem;
+  height: 2.6rem;
   align-items: center;
   justify-content: center;
-  padding: 2.1rem 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.meme-card__caption-copy {
+  min-width: 0;
+}
+
+.meme-card__caption-label {
+  margin: 0 0 0.4rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .meme-card__quote {
-  max-width: 92%;
+  max-width: 100%;
+  margin: 0;
   color: #fff;
-  text-align: center;
-  font-size: clamp(2.05rem, 6vw, 2.65rem);
+  text-align: left;
+  font-size: clamp(1.45rem, 4.8vw, 1.9rem);
   font-weight: 900;
-  line-height: 0.9;
-  letter-spacing: -0.05em;
-  text-transform: uppercase;
-  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.56);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+  text-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
 }
 
 .meme-card__empty {
@@ -168,6 +218,18 @@
 @media (min-width: 640px) {
   .meme-card__content {
     padding: 1.55rem;
+  }
+
+  .meme-card__stage {
+    padding: 1.8rem 0 1.25rem;
+  }
+
+  .meme-card__caption-card {
+    padding: 1.1rem 1.15rem;
+  }
+
+  .meme-card__quote {
+    font-size: clamp(1.55rem, 4.4vw, 2rem);
   }
 
   .meme-card__empty-copy {

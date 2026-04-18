@@ -1,8 +1,8 @@
 import { forwardRef } from 'react'
-import { ImagePlus, Sparkles } from 'lucide-react'
+import { ImagePlus, Quote, Sparkles } from 'lucide-react'
 import './MemeCard.css'
 
-const WATERMARK = 'https://www.google.com/search?q=TraduzMeuBicho.com'
+const WATERMARK = 'traduz-meu-bicho.vercel.app'
 
 const MemeCard = forwardRef(function MemeCard(
   { imageSrc, phrase, isLoading, onSelectImage, isInteractive = false },
@@ -41,25 +41,37 @@ const MemeCard = forwardRef(function MemeCard(
       )}
 
       <div className="meme-card__content">
-        <div className="meme-card__badge">
-          <Sparkles size={12} />
-          TraduzMeuBicho
+        <div className="meme-card__top">
+          <div className="meme-card__badge">
+            <Sparkles size={12} />
+            TraduzMeuBicho
+          </div>
+
+          {isInteractive && (
+            <div className="meme-card__tap-hint">
+              <span className="meme-card__tap-pill">
+                <ImagePlus size={14} />
+                Toque no card para trocar a foto
+              </span>
+            </div>
+          )}
         </div>
 
-        {isInteractive && (
-          <div className="meme-card__tap-hint">
-            <span className="meme-card__tap-pill">
-              <ImagePlus size={14} />
-              Toque no card para trocar a foto
-            </span>
-          </div>
-        )}
-
-        <div className="meme-card__center">
+        <div className="meme-card__stage">
           {imageSrc ? (
-            <blockquote className="meme-card__quote">
-              {isLoading ? '...' : phrase || 'Seu pet ja esta preparando a humilhacao.'}
-            </blockquote>
+            <div className="meme-card__caption-wrap">
+              <div className="meme-card__caption-card">
+                <div className="meme-card__caption-icon">
+                  <Quote size={18} />
+                </div>
+                <div className="meme-card__caption-copy">
+                  <p className="meme-card__caption-label">Pensamento do pet</p>
+                  <blockquote className="meme-card__quote">
+                    {isLoading ? '...' : phrase || 'Seu pet ja esta preparando a humilhacao.'}
+                  </blockquote>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="meme-card__empty">
               <div className="meme-card__icon-wrap">
