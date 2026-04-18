@@ -83,10 +83,24 @@ function getReadableError(error) {
   const message = error?.message || ''
   const normalized = message.toLowerCase()
 
+  if (
+    normalized.includes('kv_rest_api_url') ||
+    normalized.includes('kv_rest_api_token') ||
+    normalized.includes('upstash') ||
+    normalized.includes('redis')
+  ) {
+    return {
+      status: 500,
+      error: 'O storage de limite diario nao esta configurado na Vercel. Conecte o KV/Redis e redeploy.',
+      code: 'RATE_LIMIT_STORE_MISCONFIGURED',
+    }
+  }
+
   if (error?.status === 429 || normalized.includes('quota') || normalized.includes('rate limit')) {
     return {
       status: 503,
       error: 'A conta do Gemini atingiu o limite agora. Revise quota e billing no Google AI Studio.',
+      code: 'GEMINI_RATE_LIMIT',
     }
   }
 
@@ -99,6 +113,7 @@ function getReadableError(error) {
     return {
       status: 500,
       error: 'A chave do Gemini na Vercel parece invalida ou sem permissao para este modelo.',
+      code: 'GEMINI_AUTH_INVALID',
     }
   }
 
@@ -106,12 +121,14 @@ function getReadableError(error) {
     return {
       status: 500,
       error: `O modelo ${MODEL_NAME} nao respondeu como esperado. Verifique GEMINI_MODEL e compatibilidade da API.`,
+      code: 'GEMINI_MODEL_INVALID',
     }
   }
 
   return {
     status: 500,
     error: 'A IA ficou sem resposta agora. Tente novamente em instantes.',
+    code: 'UNKNOWN_BACKEND_ERROR',
   }
 }
 
@@ -150,6 +167,14 @@ export default async function handler(request, response) {
   if (!process.env.GEMINI_API_KEY) {
     return sendJson(response, 500, {
       error: 'A chave da IA nao esta configurada no servidor.',
+      code: 'GEMINI_API_KEY_MISSING',
+    })
+  }
+
+  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+    return sendJson(response, 500, {
+      error: 'O storage de limite diario nao esta configurado na Vercel. Conecte o KV/Redis e redeploy.',
+      code: 'RATE_LIMIT_STORE_MISCONFIGURED',
     })
   }
 
@@ -232,6 +257,7 @@ export default async function handler(request, response) {
     const friendlyError = getReadableError(error)
     return sendJson(response, friendlyError.status, {
       error: friendlyError.error,
+      code: friendlyError.code,
     })
   }
 }
