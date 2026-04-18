@@ -99,22 +99,54 @@ async function readApiPayload(response) {
   const rawBody = await response.text()
 
   if (!rawBody) {
-    throw new Error(
-      'A API respondeu sem conteudo. Em ambiente local, rode com `vercel dev` para servir /api.',
-    )
+    const error = new Error('A API respondeu sem conteudo.')
+    error.code = 'EMPTY_API_RESPONSE'
+    throw error
   }
 
   if (!contentType.includes('application/json')) {
-    throw new Error(
-      'A rota /api/gerar-traducao nao retornou JSON. Em ambiente local, use `vercel dev` em vez de apenas `vite`.',
-    )
+    const error = new Error('A rota nao retornou JSON.')
+    error.code = 'INVALID_API_RESPONSE_FORMAT'
+    throw error
   }
 
   try {
     return JSON.parse(rawBody)
   } catch {
-    throw new Error('A resposta da API veio invalida. Verifique o terminal do backend.')
+    const error = new Error('A resposta da API veio invalida.')
+    error.code = 'INVALID_API_RESPONSE_BODY'
+    throw error
   }
+}
+
+function getMensagemAmigavelDaApi(status, code) {
+  if (status === 429 || code === 'LIMIT_EXCEEDED') {
+    return 'Seu pet ja fofocou demais por hoje! Volte amanha para mais 2 traducoes gratuitas.'
+  }
+
+  if (status === 422) {
+    return 'Nao consegui reconhecer um pet com clareza. Tente outra foto.'
+  }
+
+  if (
+    code === 'RATE_LIMIT_STORE_MISCONFIGURED' ||
+    code === 'GEMINI_API_KEY_MISSING' ||
+    code === 'GEMINI_AUTH_INVALID' ||
+    code === 'GEMINI_MODEL_INVALID' ||
+    code === 'GEMINI_RATE_LIMIT' ||
+    code === 'UNKNOWN_BACKEND_ERROR' ||
+    code === 'EMPTY_API_RESPONSE' ||
+    code === 'INVALID_API_RESPONSE_FORMAT' ||
+    code === 'INVALID_API_RESPONSE_BODY'
+  ) {
+    return 'Estamos com instabilidade agora. Tente novamente em instantes.'
+  }
+
+  if (status >= 500) {
+    return 'Estamos com instabilidade agora. Tente novamente em instantes.'
+  }
+
+  return null
 }
 
 function App() {
@@ -224,12 +256,14 @@ function App() {
           salvarUsoDiario(LIMITE_DIARIO)
           setUsoDiario(LIMITE_DIARIO)
           setLimiteAtingido(true)
-          setError('Seu pet ja fofocou demais por hoje! Volte amanha para mais 2 traducoes gratuitas.')
+          setError(getMensagemAmigavelDaApi(response.status, payload.code))
           setStatus('idle')
           return
         }
 
-        throw new Error(payload.error || 'Nao foi possivel traduzir seu bicho agora.')
+        const apiError = new Error(getMensagemAmigavelDaApi(response.status, payload.code))
+        apiError.code = payload.code
+        throw apiError
       }
 
       const usedToday = Number(payload?.usage?.used)
@@ -243,7 +277,14 @@ function App() {
       setPhrase(payload.phrase)
       setStatus('success')
     } catch (requestError) {
-      setError(requestError.message || 'Aconteceu um erro ao gerar a frase.')
+      const mensagemAmigavel = getMensagemAmigavelDaApi(
+        requestError?.status || 0,
+        requestError?.code,
+      )
+
+      setError(
+        mensagemAmigavel || requestError.message || 'Aconteceu um erro ao gerar a frase.',
+      )
       setStatus('error')
     }
   }

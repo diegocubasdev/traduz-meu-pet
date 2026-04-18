@@ -91,7 +91,7 @@ function getReadableError(error) {
   ) {
     return {
       status: 500,
-      error: 'O storage de limite diario nao esta configurado na Vercel. Conecte o KV/Redis e redeploy.',
+      error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
       code: 'RATE_LIMIT_STORE_MISCONFIGURED',
     }
   }
@@ -99,7 +99,7 @@ function getReadableError(error) {
   if (error?.status === 429 || normalized.includes('quota') || normalized.includes('rate limit')) {
     return {
       status: 503,
-      error: 'A conta do Gemini atingiu o limite agora. Revise quota e billing no Google AI Studio.',
+      error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
       code: 'GEMINI_RATE_LIMIT',
     }
   }
@@ -112,7 +112,7 @@ function getReadableError(error) {
   ) {
     return {
       status: 500,
-      error: 'A chave do Gemini na Vercel parece invalida ou sem permissao para este modelo.',
+      error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
       code: 'GEMINI_AUTH_INVALID',
     }
   }
@@ -120,7 +120,7 @@ function getReadableError(error) {
   if (error?.status === 404 || normalized.includes('not found') || normalized.includes('model')) {
     return {
       status: 500,
-      error: `O modelo ${MODEL_NAME} nao respondeu como esperado. Verifique GEMINI_MODEL e compatibilidade da API.`,
+      error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
       code: 'GEMINI_MODEL_INVALID',
     }
   }
@@ -166,14 +166,14 @@ export default async function handler(request, response) {
 
   if (!process.env.GEMINI_API_KEY) {
     return sendJson(response, 500, {
-      error: 'A chave da IA nao esta configurada no servidor.',
+      error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
       code: 'GEMINI_API_KEY_MISSING',
     })
   }
 
   if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
     return sendJson(response, 500, {
-      error: 'O storage de limite diario nao esta configurado na Vercel. Conecte o KV/Redis e redeploy.',
+      error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
       code: 'RATE_LIMIT_STORE_MISCONFIGURED',
     })
   }
