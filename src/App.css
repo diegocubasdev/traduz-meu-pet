@@ -193,6 +193,56 @@
   gap: 0.75rem;
 }
 
+.app-quota {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(184, 108, 82, 0.12);
+  border-radius: 1.2rem;
+  background: linear-gradient(180deg, rgba(255, 248, 243, 0.98) 0%, rgba(248, 238, 231, 0.92) 100%);
+}
+
+.app-quota-label {
+  color: #7b5a4c;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.app-quota-value {
+  color: #9d5b44;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.app-limit-card {
+  width: 100%;
+}
+
+.app-limit-badge,
+.app-limit-text {
+  margin: 0;
+}
+
+.app-limit-badge {
+  color: #b45309;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.app-limit-text {
+  margin-top: 0.55rem;
+  color: #7c3f12;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .app-preview-actions {
   margin-top: 1.15rem;
 }

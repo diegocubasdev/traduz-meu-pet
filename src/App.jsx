@@ -37,6 +37,63 @@ const compressionOptions = {
   initialQuality: 0.82,
 }
 
+const LIMITE_DIARIO = 2
+const STORAGE_KEY = 'uso_tradutor'
+
+function formatarDataAtual() {
+  return new Intl.DateTimeFormat('pt-BR').format(new Date())
+}
+
+function lerUsoDiario() {
+  const hoje = formatarDataAtual()
+
+  if (typeof window === 'undefined') {
+    return { data: hoje, uso_hoje: 0 }
+  }
+
+  const salvo = window.localStorage.getItem(STORAGE_KEY)
+
+  if (!salvo) {
+    return { data: hoje, uso_hoje: 0 }
+  }
+
+  try {
+    const parsed = JSON.parse(salvo)
+    const usoHoje = Number(parsed?.uso_hoje)
+
+    if (parsed?.data !== hoje) {
+      const resetado = { data: hoje, uso_hoje: 0 }
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(resetado))
+      return resetado
+    }
+
+    if (Number.isNaN(usoHoje) || usoHoje < 0) {
+      const normalizado = { data: hoje, uso_hoje: 0 }
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizado))
+      return normalizado
+    }
+
+    return { data: hoje, uso_hoje: usoHoje }
+  } catch {
+    const resetado = { data: hoje, uso_hoje: 0 }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(resetado))
+    return resetado
+  }
+}
+
+function salvarUsoDiario(usoHoje) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const payload = {
+    data: formatarDataAtual(),
+    uso_hoje: Math.min(Math.max(usoHoje, 0), LIMITE_DIARIO),
+  }
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+}
+
 async function readApiPayload(response) {
   const contentType = response.headers.get('content-type') || ''
   const rawBody = await response.text()
@@ -49,7 +106,7 @@ async function readApiPayload(response) {
 
   if (!contentType.includes('application/json')) {
     throw new Error(
-      'A rota /api/gerar nao retornou JSON. Em ambiente local, use `vercel dev` em vez de apenas `vite`.',
+      'A rota /api/gerar-traducao nao retornou JSON. Em ambiente local, use `vercel dev` em vez de apenas `vite`.',
     )
   }
 
@@ -65,6 +122,8 @@ function App() {
   const [previewUrl, setPreviewUrl] = useState('')
   const [phrase, setPhrase] = useState('')
   const [error, setError] = useState('')
+  const [usoDiario, setUsoDiario] = useState(() => lerUsoDiario().uso_hoje)
+  const [limiteAtingido, setLimiteAtingido] = useState(() => lerUsoDiario().uso_hoje >= LIMITE_DIARIO)
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -105,6 +164,15 @@ function App() {
       reader.readAsDataURL(file)
     })
 
+  const verificarLimiteDiario = () => {
+    const usoSalvo = lerUsoDiario()
+
+    setUsoDiario(usoSalvo.uso_hoje)
+
+    setLimiteAtingido(usoSalvo.uso_hoje >= LIMITE_DIARIO)
+    return usoSalvo
+  }
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0]
 
@@ -124,6 +192,8 @@ function App() {
       return
     }
 
+    verificarLimiteDiario()
+
     setError('')
     setPhrase('')
 
@@ -136,7 +206,7 @@ function App() {
 
       const compressedFile = await imageCompression(file, compressionOptions)
       const imageBase64 = await fileToDataUrl(compressedFile)
-      const response = await fetch('/api/gerar', {
+      const response = await fetch('/api/gerar-traducao', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +220,24 @@ function App() {
       const payload = await readApiPayload(response)
 
       if (!response.ok) {
+        if (response.status === 429 && payload.code === 'LIMIT_EXCEEDED') {
+          salvarUsoDiario(LIMITE_DIARIO)
+          setUsoDiario(LIMITE_DIARIO)
+          setLimiteAtingido(true)
+          setError('Seu pet ja fofocou demais por hoje! Volte amanha para mais 2 traducoes gratuitas.')
+          setStatus('idle')
+          return
+        }
+
         throw new Error(payload.error || 'Nao foi possivel traduzir seu bicho agora.')
+      }
+
+      const usedToday = Number(payload?.usage?.used)
+
+      if (!Number.isNaN(usedToday)) {
+        salvarUsoDiario(usedToday)
+        setUsoDiario(usedToday)
+        setLimiteAtingido(usedToday >= LIMITE_DIARIO)
       }
 
       setPhrase(payload.phrase)
@@ -255,9 +342,12 @@ function App() {
   const hasResult = status === 'success'
   const hasImage = Boolean(previewUrl)
   const isBusy = status === 'loading'
+  const traducoesRestantes = Math.max(LIMITE_DIARIO - usoDiario, 0)
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
   const openFilePicker = () => {
-    if (!isBusy) {
+    const usoLocal = verificarLimiteDiario()
+
+    if (!isBusy && usoLocal.uso_hoje < LIMITE_DIARIO) {
       fileInputRef.current?.click()
     }
   }
@@ -265,6 +355,8 @@ function App() {
     ? 'Card pronto para postar'
     : isBusy
       ? 'Traduzindo seu pet'
+      : limiteAtingido
+        ? 'Limite diario atingido'
       : hasImage
         ? 'Foto recebida'
         : 'Envie uma foto para comecar'
@@ -310,19 +402,34 @@ function App() {
               <span className="app-status-chip">{statusLabel}</span>
             </div>
 
+            <div className="app-quota" aria-live="polite">
+              <span className="app-quota-label">Traducoes restantes hoje</span>
+              <strong className="app-quota-value">{traducoesRestantes}/{LIMITE_DIARIO}</strong>
+            </div>
+
             <div className="app-actions">
-              <label className="button-primary button-file">
-                <Upload size={18} />
-                Escolher foto
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileChange}
-                  disabled={isBusy}
-                />
-              </label>
+              {limiteAtingido ? (
+                <div className="app-limit-card rounded-[1.5rem] border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-white p-5 shadow-sm">
+                  <p className="app-limit-badge">Limite diario encerrado</p>
+                  <p className="app-limit-text">
+                    Seu pet ja fofocou demais por hoje! {'\uD83E\uDD2B'} Volte amanha para mais 2
+                    traducoes gratuitas.
+                  </p>
+                </div>
+              ) : (
+                <label className="button-primary button-file">
+                  <Upload size={18} />
+                  Escolher foto
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={isBusy}
+                  />
+                </label>
+              )}
 
               <button
                 type="button"
@@ -382,11 +489,11 @@ function App() {
               <button
                 type="button"
                 onClick={openFilePicker}
-                disabled={isBusy}
+                disabled={isBusy || limiteAtingido}
                 className="button-secondary"
               >
                 <Upload size={17} />
-                Nova tentativa
+                {limiteAtingido ? 'Volte amanha' : 'Nova tentativa'}
               </button>
             </div>
 
