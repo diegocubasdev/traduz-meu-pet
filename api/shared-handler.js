@@ -63,7 +63,7 @@ function extractBase64(imageBase64) {
 
 function normalizePhrase(text) {
   const compact = text
-    .replace(/["â€œâ€]/g, '')
+    .replace(/["Ã¢â‚¬Å“Ã¢â‚¬Â]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -92,7 +92,6 @@ function getReadableError(error) {
     return {
       status: 500,
       error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
-      code: 'RATE_LIMIT_STORE_MISCONFIGURED',
     }
   }
 
@@ -100,7 +99,6 @@ function getReadableError(error) {
     return {
       status: 503,
       error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
-      code: 'GEMINI_RATE_LIMIT',
     }
   }
 
@@ -113,7 +111,6 @@ function getReadableError(error) {
     return {
       status: 500,
       error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
-      code: 'GEMINI_AUTH_INVALID',
     }
   }
 
@@ -121,14 +118,12 @@ function getReadableError(error) {
     return {
       status: 500,
       error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
-      code: 'GEMINI_MODEL_INVALID',
     }
   }
 
   return {
     status: 500,
     error: 'A IA ficou sem resposta agora. Tente novamente em instantes.',
-    code: 'UNKNOWN_BACKEND_ERROR',
   }
 }
 
@@ -152,9 +147,19 @@ function getLimitKey(ip) {
 
 async function incrementUsage(limitKey) {
   const updatedCount = await kv.incr(limitKey)
+  await kv.expire(limitKey, TTL_EM_SEGUNDOS)
+  return updatedCount
+}
+
+async function releaseUsage(limitKey) {
+  const updatedCount = await kv.decr(limitKey)
+
+  if (updatedCount <= 0) {
+    await kv.del(limitKey)
+    return 0
+  }
 
   await kv.expire(limitKey, TTL_EM_SEGUNDOS)
-
   return updatedCount
 }
 
@@ -167,14 +172,12 @@ export default async function handler(request, response) {
   if (!process.env.GEMINI_API_KEY) {
     return sendJson(response, 500, {
       error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
-      code: 'GEMINI_API_KEY_MISSING',
     })
   }
 
   if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
     return sendJson(response, 500, {
       error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
-      code: 'RATE_LIMIT_STORE_MISCONFIGURED',
     })
   }
 
@@ -203,14 +206,18 @@ export default async function handler(request, response) {
 
   const clientIp = getClientIp(request)
   const limitKey = getLimitKey(clientIp)
+  let reservedUsage = false
 
   try {
-    const currentUsage = Number((await kv.get(limitKey)) || 0)
+    const reservedCount = await incrementUsage(limitKey)
+    reservedUsage = true
 
-    if (currentUsage >= LIMITE_DIARIO) {
+    if (reservedCount > LIMITE_DIARIO) {
+      await releaseUsage(limitKey)
+      reservedUsage = false
+
       return sendJson(response, 429, {
-        error: 'Limite diário atingido',
-        code: 'LIMIT_EXCEEDED',
+        error: 'Limite diario atingido',
       })
     }
 
@@ -230,22 +237,35 @@ export default async function handler(request, response) {
     const phrase = normalizePhrase(rawText)
 
     if (!phrase || looksInvalid(phrase)) {
+      await releaseUsage(limitKey)
+      reservedUsage = false
+
       return sendJson(response, 422, {
         error: 'Nao consegui reconhecer um pet com clareza. Tente outra foto.',
       })
     }
 
-    const updatedUsage = await incrementUsage(limitKey)
-
     return sendJson(response, 200, {
       phrase,
       usage: {
         limit: LIMITE_DIARIO,
-        used: updatedUsage,
-        remaining: Math.max(LIMITE_DIARIO - updatedUsage, 0),
+        used: reservedCount,
+        remaining: Math.max(LIMITE_DIARIO - reservedCount, 0),
       },
     })
   } catch (error) {
+    if (reservedUsage) {
+      try {
+        await releaseUsage(limitKey)
+      } catch (rollbackError) {
+        console.error('Usage rollback failed', {
+          ip: clientIp,
+          message: rollbackError?.message,
+          stack: rollbackError?.stack,
+        })
+      }
+    }
+
     console.error('Gemini request failed', {
       model: MODEL_NAME,
       ip: clientIp,
@@ -257,7 +277,6 @@ export default async function handler(request, response) {
     const friendlyError = getReadableError(error)
     return sendJson(response, friendlyError.status, {
       error: friendlyError.error,
-      code: friendlyError.code,
     })
   }
 }

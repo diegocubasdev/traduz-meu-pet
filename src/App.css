@@ -218,12 +218,27 @@
   letter-spacing: -0.03em;
 }
 
+.app-limit-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid rgba(180, 83, 9, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 247, 237, 0.95);
+  color: #9a4d11;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .app-limit-card {
   width: 100%;
 }
 
 .app-limit-badge,
-.app-limit-text {
+.app-limit-text,
+.app-limit-subtext {
   margin: 0;
 }
 
@@ -240,6 +255,13 @@
   color: #7c3f12;
   font-size: 0.95rem;
   font-weight: 700;
+  line-height: 1.5;
+}
+
+.app-limit-subtext {
+  margin-top: 0.55rem;
+  color: #9a5b32;
+  font-size: 0.82rem;
   line-height: 1.5;
 }
 

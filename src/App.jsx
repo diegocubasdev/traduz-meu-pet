@@ -2,6 +2,7 @@ import imageCompression from 'browser-image-compression'
 import { toPng } from 'html-to-image'
 import {
   AlertCircle,
+  Clock3,
   Copy,
   Download,
   LoaderCircle,
@@ -94,6 +95,16 @@ function salvarUsoDiario(usoHoje) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 }
 
+function formatarAmanhaLabel() {
+  const amanha = new Date()
+  amanha.setDate(amanha.getDate() + 1)
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(amanha)
+}
+
 async function readApiPayload(response) {
   const contentType = response.headers.get('content-type') || ''
   const rawBody = await response.text()
@@ -120,7 +131,7 @@ async function readApiPayload(response) {
 }
 
 function getMensagemAmigavelDaApi(status, code) {
-  if (status === 429 || code === 'LIMIT_EXCEEDED') {
+  if (status === 429) {
     return 'Seu pet ja fofocou demais por hoje! Volte amanha para mais 2 traducoes gratuitas.'
   }
 
@@ -129,12 +140,6 @@ function getMensagemAmigavelDaApi(status, code) {
   }
 
   if (
-    code === 'RATE_LIMIT_STORE_MISCONFIGURED' ||
-    code === 'GEMINI_API_KEY_MISSING' ||
-    code === 'GEMINI_AUTH_INVALID' ||
-    code === 'GEMINI_MODEL_INVALID' ||
-    code === 'GEMINI_RATE_LIMIT' ||
-    code === 'UNKNOWN_BACKEND_ERROR' ||
     code === 'EMPTY_API_RESPONSE' ||
     code === 'INVALID_API_RESPONSE_FORMAT' ||
     code === 'INVALID_API_RESPONSE_BODY'
@@ -162,6 +167,7 @@ function App() {
   const [loadingIndex, setLoadingIndex] = useState(0)
   const fileInputRef = useRef(null)
   const cardRef = useRef(null)
+  const amanhaLabel = formatarAmanhaLabel()
 
   useEffect(() => {
     if (status !== 'loading') {
@@ -200,7 +206,6 @@ function App() {
     const usoSalvo = lerUsoDiario()
 
     setUsoDiario(usoSalvo.uso_hoje)
-
     setLimiteAtingido(usoSalvo.uso_hoje >= LIMITE_DIARIO)
     return usoSalvo
   }
@@ -224,7 +229,16 @@ function App() {
       return
     }
 
-    verificarLimiteDiario()
+    const usoLocal = verificarLimiteDiario()
+
+    if (usoLocal.uso_hoje >= LIMITE_DIARIO) {
+      setError('Seu pet ja fofocou demais por hoje! Volte amanha para mais 2 traducoes gratuitas.')
+      setStatus('idle')
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      return
+    }
 
     setError('')
     setPhrase('')
@@ -252,17 +266,16 @@ function App() {
       const payload = await readApiPayload(response)
 
       if (!response.ok) {
-        if (response.status === 429 && payload.code === 'LIMIT_EXCEEDED') {
+        if (response.status === 429) {
           salvarUsoDiario(LIMITE_DIARIO)
           setUsoDiario(LIMITE_DIARIO)
           setLimiteAtingido(true)
-          setError(getMensagemAmigavelDaApi(response.status, payload.code))
+          setError(getMensagemAmigavelDaApi(response.status))
           setStatus('idle')
           return
         }
 
-        const apiError = new Error(getMensagemAmigavelDaApi(response.status, payload.code))
-        apiError.code = payload.code
+        const apiError = new Error(getMensagemAmigavelDaApi(response.status))
         throw apiError
       }
 
@@ -448,6 +461,13 @@ function App() {
               <strong className="app-quota-value">{traducoesRestantes}/{LIMITE_DIARIO}</strong>
             </div>
 
+            {limiteAtingido && (
+              <div className="app-limit-inline">
+                <Clock3 size={16} />
+                <span>Novas 2 traducoes liberadas em {amanhaLabel}.</span>
+              </div>
+            )}
+
             <div className="app-actions">
               {limiteAtingido ? (
                 <div className="app-limit-card rounded-[1.5rem] border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-white p-5 shadow-sm">
@@ -455,6 +475,9 @@ function App() {
                   <p className="app-limit-text">
                     Seu pet ja fofocou demais por hoje! {'\uD83E\uDD2B'} Volte amanha para mais 2
                     traducoes gratuitas.
+                  </p>
+                  <p className="app-limit-subtext">
+                    O upload fica liberado novamente automaticamente no proximo dia.
                   </p>
                 </div>
               ) : (
@@ -475,17 +498,18 @@ function App() {
               <button
                 type="button"
                 onClick={resetFlow}
-                disabled={isBusy && !hasImage}
+                disabled={limiteAtingido || (isBusy && !hasImage)}
                 className="button-secondary"
               >
                 <RefreshCcw size={16} />
-                Trocar foto
+                {limiteAtingido ? 'Aguardar amanha' : 'Trocar foto'}
               </button>
             </div>
 
             <p className="app-tip">
-              Melhora muito com rosto visivel, expressao clara e enquadramento
-              mais fechado.
+              {limiteAtingido
+                ? 'Seu limite gratuito de hoje foi usado. Volte amanha para desbloquear novas tentativas.'
+                : 'Melhora muito com rosto visivel, expressao clara e enquadramento mais fechado.'}
             </p>
 
             {isBusy && (
@@ -513,7 +537,7 @@ function App() {
               phrase={phrase}
               isLoading={isBusy}
               onSelectImage={openFilePicker}
-              isInteractive={!isBusy}
+              isInteractive={!isBusy && !limiteAtingido}
             />
 
             <div className="app-preview-actions">
@@ -533,8 +557,8 @@ function App() {
                 disabled={isBusy || limiteAtingido}
                 className="button-secondary"
               >
-                <Upload size={17} />
-                {limiteAtingido ? 'Volte amanha' : 'Nova tentativa'}
+                {limiteAtingido ? <Clock3 size={17} /> : <Upload size={17} />}
+                {limiteAtingido ? `Volte em ${amanhaLabel}` : 'Nova tentativa'}
               </button>
             </div>
 
