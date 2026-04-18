@@ -278,20 +278,6 @@ function App() {
             )}
           </div>
 
-          <div className="app-highlights">
-            <div className="app-highlight">
-              <strong>Impacto imediato</strong>
-              <span>O card aparece grande logo de cara para reforcar o premio visual.</span>
-            </div>
-            <div className="app-highlight">
-              <strong>Baixa friccao</strong>
-              <span>Uma acao principal clara evita decisao demais em tela pequena.</span>
-            </div>
-            <div className="app-highlight">
-              <strong>Pronto para rede</strong>
-              <span>Formato vertical pensado para TikTok, Reels e Stories.</span>
-            </div>
-          </div>
         </section>
 
         <section className="app-preview">
