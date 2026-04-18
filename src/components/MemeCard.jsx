@@ -51,7 +51,7 @@ const MemeCard = forwardRef(function MemeCard(
             <div className="meme-card__tap-hint">
               <span className="meme-card__tap-pill">
                 <ImagePlus size={14} />
-                Toque no card para trocar a foto
+                Toque no card para trocar foto
               </span>
             </div>
           )}

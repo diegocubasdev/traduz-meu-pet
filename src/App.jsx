@@ -2,9 +2,12 @@ import imageCompression from 'browser-image-compression'
 import { toPng } from 'html-to-image'
 import {
   AlertCircle,
+  Copy,
   Download,
   LoaderCircle,
+  MessageCircle,
   RefreshCcw,
+  Share2,
   Sparkles,
   Upload,
 } from 'lucide-react'
@@ -63,6 +66,8 @@ function App() {
   const [phrase, setPhrase] = useState('')
   const [error, setError] = useState('')
   const [isDownloading, setIsDownloading] = useState(false)
+  const [isSharing, setIsSharing] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [loadingIndex, setLoadingIndex] = useState(0)
   const fileInputRef = useRef(null)
   const cardRef = useRef(null)
@@ -163,12 +168,7 @@ function App() {
 
     try {
       setIsDownloading(true)
-
-      const dataUrl = await toPng(cardRef.current, {
-        cacheBust: true,
-        pixelRatio: 2,
-        skipFonts: true,
-      })
+      const dataUrl = await generateCardImage()
 
       const link = document.createElement('a')
       link.download = 'traduz-meu-bicho.png'
@@ -182,9 +182,80 @@ function App() {
     }
   }
 
+  const generateCardImage = async () => {
+    if (!cardRef.current) {
+      throw new Error('Card indisponivel para compartilhar agora.')
+    }
+
+    return toPng(cardRef.current, {
+      cacheBust: true,
+      pixelRatio: 2,
+      skipFonts: true,
+    })
+  }
+
+  const dataUrlToFile = async (dataUrl) => {
+    const response = await fetch(dataUrl)
+    const blob = await response.blob()
+    return new File([blob], 'traduz-meu-bicho.png', { type: 'image/png' })
+  }
+
+  const getShareText = () => {
+    const baseText = phrase || 'Olha o que meu pet falou de mim no TraduzMeuBicho.'
+    return `${baseText} ${window.location.origin}`
+  }
+
+  const handleNativeShare = async () => {
+    if (!hasResult) {
+      return
+    }
+
+    try {
+      setIsSharing(true)
+      const dataUrl = await generateCardImage()
+      const file = await dataUrlToFile(dataUrl)
+      const shareData = {
+        title: 'TraduzMeuBicho',
+        text: getShareText(),
+      }
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          ...shareData,
+          files: [file],
+        })
+        return
+      }
+
+      await navigator.share({
+        ...shareData,
+        url: window.location.origin,
+      })
+    } catch (shareError) {
+      if (shareError?.name !== 'AbortError') {
+        setError('Nao foi possivel abrir o compartilhamento agora.')
+        setStatus('error')
+      }
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.origin)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setError('Nao foi possivel copiar o link do site.')
+      setStatus('error')
+    }
+  }
+
   const hasResult = status === 'success'
   const hasImage = Boolean(previewUrl)
   const isBusy = status === 'loading'
+  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
   const openFilePicker = () => {
     if (!isBusy) {
       fileInputRef.current?.click()
@@ -197,6 +268,12 @@ function App() {
       : hasImage
         ? 'Foto recebida'
         : 'Envie uma foto para comecar'
+  const encodedShareText = encodeURIComponent(getShareText())
+  const encodedUrl = encodeURIComponent(
+    typeof window !== 'undefined' ? window.location.origin : 'https://traduz-meu-bicho.vercel.app',
+  )
+  const whatsappShareUrl = `https://wa.me/?text=${encodedShareText}`
+  const xShareUrl = `https://twitter.com/intent/tweet?text=${encodedShareText}&url=${encodedUrl}`
 
   return (
     <main className="app-shell">
@@ -318,6 +395,62 @@ function App() {
                 <Upload size={17} />
                 Nova tentativa
               </button>
+            </div>
+
+            <div className="app-share-panel">
+              <p className="app-share-label">Compartilhar</p>
+              <div className="app-share-actions">
+                {canNativeShare && (
+                  <button
+                    type="button"
+                    onClick={handleNativeShare}
+                    disabled={!hasResult || isSharing}
+                    className="button-share"
+                  >
+                    <Share2 size={16} />
+                    {isSharing ? 'Abrindo...' : 'Compartilhar'}
+                  </button>
+                )}
+
+                <a
+                  href={whatsappShareUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`button-share ${!hasResult ? 'button-share--disabled' : ''}`}
+                  onClick={(event) => {
+                    if (!hasResult) {
+                      event.preventDefault()
+                    }
+                  }}
+                >
+                  <MessageCircle size={16} />
+                  WhatsApp
+                </a>
+
+                <a
+                  href={xShareUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`button-share ${!hasResult ? 'button-share--disabled' : ''}`}
+                  onClick={(event) => {
+                    if (!hasResult) {
+                      event.preventDefault()
+                    }
+                  }}
+                >
+                  <Share2 size={16} />
+                  X
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="button-share"
+                >
+                  <Copy size={16} />
+                  {copied ? 'Link copiado' : 'Copiar link'}
+                </button>
+              </div>
             </div>
           </div>
         </section>

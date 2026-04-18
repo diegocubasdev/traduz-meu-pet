@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const PROMPT =
-  'Analise esta imagem de um animal. Identifique o contexto e a expressao facial. Escreva uma frase curta, com no maximo 15 palavras, em primeira pessoa, com um tom extremamente sarcastico, ironico ou de cobranca, como se o animal estivesse julgando o dono. Devolva apenas o texto da frase.'
+  'Analise esta imagem de um animal de estimacao. Identifique a expressao facial, a pose e o contexto visual. Escreva uma unica frase curta, com no maximo 15 palavras, em primeira pessoa, como se o proprio animal estivesse falando. A frase deve ser MUITO engracada, afiada, debochada, sarcastica, ironica e com energia de meme viral. Priorize humor de julgamento, drama exagerado, cobranca passivo-agressiva, superioridade e frustracao com o dono. Evite frases genericas, fofinhas, poeticas ou sem graca. A frase precisa soar natural, inesperada e compartilhavel, como legenda de post que faz a pessoa rir na hora. Devolva apenas o texto final, sem aspas, sem explicacao e sem emoji.'
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
