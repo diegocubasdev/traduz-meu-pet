@@ -95,6 +95,16 @@ function salvarUsoDiario(usoHoje) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 }
 
+function sincronizarUsoDiario(usoHoje) {
+  const usoNormalizado = Math.min(Math.max(usoHoje, 0), LIMITE_DIARIO)
+  salvarUsoDiario(usoNormalizado)
+
+  return {
+    uso_hoje: usoNormalizado,
+    limite_atingido: usoNormalizado >= LIMITE_DIARIO,
+  }
+}
+
 function formatarAmanhaLabel() {
   const amanha = new Date()
   amanha.setDate(amanha.getDate() + 1)
@@ -210,6 +220,13 @@ function App() {
     return usoSalvo
   }
 
+  const aplicarUsoLocal = (usoHoje) => {
+    const sincronizado = sincronizarUsoDiario(usoHoje)
+    setUsoDiario(sincronizado.uso_hoje)
+    setLimiteAtingido(sincronizado.limite_atingido)
+    return sincronizado
+  }
+
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0]
 
@@ -246,9 +263,11 @@ function App() {
     const localPreview = await fileToDataUrl(file)
 
     setPreviewUrl(localPreview)
+    const proximoUso = usoLocal.uso_hoje + 1
 
     try {
       setStatus('loading')
+      aplicarUsoLocal(proximoUso)
 
       const compressedFile = await imageCompression(file, compressionOptions)
       const imageBase64 = await fileToDataUrl(compressedFile)
@@ -267,29 +286,24 @@ function App() {
 
       if (!response.ok) {
         if (response.status === 429) {
-          salvarUsoDiario(LIMITE_DIARIO)
-          setUsoDiario(LIMITE_DIARIO)
-          setLimiteAtingido(true)
+          aplicarUsoLocal(LIMITE_DIARIO)
           setError(getMensagemAmigavelDaApi(response.status))
           setStatus('idle')
           return
         }
 
         const apiError = new Error(getMensagemAmigavelDaApi(response.status))
+        apiError.shouldRollbackUsage = true
         throw apiError
-      }
-
-      const usedToday = Number(payload?.usage?.used)
-
-      if (!Number.isNaN(usedToday)) {
-        salvarUsoDiario(usedToday)
-        setUsoDiario(usedToday)
-        setLimiteAtingido(usedToday >= LIMITE_DIARIO)
       }
 
       setPhrase(payload.phrase)
       setStatus('success')
     } catch (requestError) {
+      if (requestError?.shouldRollbackUsage !== false) {
+        aplicarUsoLocal(usoLocal.uso_hoje)
+      }
+
       const mensagemAmigavel = getMensagemAmigavelDaApi(
         requestError?.status || 0,
         requestError?.code,
