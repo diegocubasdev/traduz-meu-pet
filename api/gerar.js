@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 const PROMPT =
-  'Analise esta imagem de um animal. Identifique o contexto e a expressão facial. Escreva uma frase curta (máximo 15 palavras) em primeira pessoa, com um tom extremamente sarcástico, irônico ou de cobrança, como se o animal estivesse julgando o dono. Devolva apenas o texto da frase.'
+  'Analise esta imagem de um animal. Identifique o contexto e a expressao facial. Escreva uma frase curta, com no maximo 15 palavras, em primeira pessoa, com um tom extremamente sarcastico, ironico ou de cobranca, como se o animal estivesse julgando o dono. Devolva apenas o texto da frase.'
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
@@ -13,17 +14,12 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const INVALID_IMAGE_PATTERNS = [
   'nao consigo',
-  'não consigo',
   'nao pude',
-  'não pude',
   'nao identifiquei',
-  'não identifiquei',
   'nao foi possivel',
-  'não foi possível',
   'nao tenho certeza',
-  'não tenho certeza',
   'imagem nao mostra',
-  'imagem não mostra',
+  'nao e possivel determinar',
 ]
 
 function sendJson(response, status, payload) {
@@ -72,13 +68,48 @@ function normalizePhrase(text) {
     return ''
   }
 
-  const words = compact.split(' ').filter(Boolean)
-  return words.slice(0, 15).join(' ')
+  return compact.split(' ').filter(Boolean).slice(0, 15).join(' ')
 }
 
 function looksInvalid(phrase) {
   const lowered = phrase.toLowerCase()
   return INVALID_IMAGE_PATTERNS.some((pattern) => lowered.includes(pattern))
+}
+
+function getReadableError(error) {
+  const message = error?.message || ''
+  const normalized = message.toLowerCase()
+
+  if (error?.status === 429 || normalized.includes('quota') || normalized.includes('rate limit')) {
+    return {
+      status: 503,
+      error: 'A conta do Gemini atingiu o limite agora. Revise quota e billing no Google AI Studio.',
+    }
+  }
+
+  if (
+    error?.status === 401 ||
+    error?.status === 403 ||
+    normalized.includes('api key') ||
+    normalized.includes('permission')
+  ) {
+    return {
+      status: 500,
+      error: 'A chave do Gemini na Vercel parece invalida ou sem permissao para este modelo.',
+    }
+  }
+
+  if (error?.status === 404 || normalized.includes('not found') || normalized.includes('model')) {
+    return {
+      status: 500,
+      error: `O modelo ${MODEL_NAME} nao respondeu como esperado. Verifique GEMINI_MODEL e compatibilidade da API.`,
+    }
+  }
+
+  return {
+    status: 500,
+    error: 'A IA ficou sem resposta agora. Tente novamente em instantes.',
+  }
 }
 
 export default async function handler(request, response) {
@@ -118,7 +149,7 @@ export default async function handler(request, response) {
 
   try {
     const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = client.getGenerativeModel({ model: MODEL_NAME })
     const result = await model.generateContent([
       PROMPT,
       {
@@ -140,12 +171,16 @@ export default async function handler(request, response) {
 
     return sendJson(response, 200, { phrase })
   } catch (error) {
-    const status = error?.status === 400 ? 422 : 500
-    return sendJson(response, status, {
-      error:
-        status === 422
-          ? 'Nao consegui reconhecer um pet com clareza. Tente outra foto.'
-          : 'A IA ficou sem resposta agora. Tente novamente em instantes.',
+    console.error('Gemini request failed', {
+      model: MODEL_NAME,
+      status: error?.status,
+      message: error?.message,
+      stack: error?.stack,
+    })
+
+    const friendlyError = getReadableError(error)
+    return sendJson(response, friendlyError.status, {
+      error: friendlyError.error,
     })
   }
 }
