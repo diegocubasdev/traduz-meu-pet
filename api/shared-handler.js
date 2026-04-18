@@ -1,9 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { kv } from '@vercel/kv'
 
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
-const LIMITE_DIARIO = 2
-const TTL_EM_SEGUNDOS = 60 * 60 * 24
 const PROMPT =
   'Analise esta imagem de um animal de estimacao. Identifique a expressao facial, a pose e o contexto visual. Escreva uma unica frase curta, com no maximo 15 palavras, em primeira pessoa, como se o proprio animal estivesse falando. A frase deve ser MUITO engracada, afiada, debochada, sarcastica, ironica e com energia de meme viral. Priorize humor de julgamento, drama exagerado, cobranca passivo-agressiva, superioridade e frustracao com o dono. Evite frases genericas, fofinhas, poeticas ou sem graca. A frase precisa soar natural, inesperada e compartilhavel, como legenda de post que faz a pessoa rir na hora. Devolva apenas o texto final, sem aspas, sem explicacao e sem emoji.'
 
@@ -63,7 +60,7 @@ function extractBase64(imageBase64) {
 
 function normalizePhrase(text) {
   const compact = text
-    .replace(/["Ã¢â‚¬Å“Ã¢â‚¬Â]/g, '')
+    .replace(/["ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã‚Â]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -82,18 +79,6 @@ function looksInvalid(phrase) {
 function getReadableError(error) {
   const message = error?.message || ''
   const normalized = message.toLowerCase()
-
-  if (
-    normalized.includes('kv_rest_api_url') ||
-    normalized.includes('kv_rest_api_token') ||
-    normalized.includes('upstash') ||
-    normalized.includes('redis')
-  ) {
-    return {
-      status: 500,
-      error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
-    }
-  }
 
   if (error?.status === 429 || normalized.includes('quota') || normalized.includes('rate limit')) {
     return {
@@ -127,42 +112,6 @@ function getReadableError(error) {
   }
 }
 
-function getClientIp(request) {
-  const forwardedFor = request.headers['x-forwarded-for']
-
-  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
-    return forwardedFor.split(',')[0].trim()
-  }
-
-  return request.socket?.remoteAddress || 'ip-desconhecido'
-}
-
-function getDateKey() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function getLimitKey(ip) {
-  return `limite_uso_${ip}_${getDateKey()}`
-}
-
-async function incrementUsage(limitKey) {
-  const updatedCount = await kv.incr(limitKey)
-  await kv.expire(limitKey, TTL_EM_SEGUNDOS)
-  return updatedCount
-}
-
-async function releaseUsage(limitKey) {
-  const updatedCount = await kv.decr(limitKey)
-
-  if (updatedCount <= 0) {
-    await kv.del(limitKey)
-    return 0
-  }
-
-  await kv.expire(limitKey, TTL_EM_SEGUNDOS)
-  return updatedCount
-}
-
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
     response.setHeader('Allow', 'POST')
@@ -170,12 +119,6 @@ export default async function handler(request, response) {
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    return sendJson(response, 500, {
-      error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
-    })
-  }
-
-  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
     return sendJson(response, 500, {
       error: 'Nao foi possivel concluir a traducao agora. Tente novamente em instantes.',
     })
@@ -204,23 +147,7 @@ export default async function handler(request, response) {
     })
   }
 
-  const clientIp = getClientIp(request)
-  const limitKey = getLimitKey(clientIp)
-  let reservedUsage = false
-
   try {
-    const reservedCount = await incrementUsage(limitKey)
-    reservedUsage = true
-
-    if (reservedCount > LIMITE_DIARIO) {
-      await releaseUsage(limitKey)
-      reservedUsage = false
-
-      return sendJson(response, 429, {
-        error: 'Limite diario atingido',
-      })
-    }
-
     const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     const model = client.getGenerativeModel({ model: MODEL_NAME })
     const result = await model.generateContent([
@@ -237,38 +164,15 @@ export default async function handler(request, response) {
     const phrase = normalizePhrase(rawText)
 
     if (!phrase || looksInvalid(phrase)) {
-      await releaseUsage(limitKey)
-      reservedUsage = false
-
       return sendJson(response, 422, {
         error: 'Nao consegui reconhecer um pet com clareza. Tente outra foto.',
       })
     }
 
-    return sendJson(response, 200, {
-      phrase,
-      usage: {
-        limit: LIMITE_DIARIO,
-        used: reservedCount,
-        remaining: Math.max(LIMITE_DIARIO - reservedCount, 0),
-      },
-    })
+    return sendJson(response, 200, { phrase })
   } catch (error) {
-    if (reservedUsage) {
-      try {
-        await releaseUsage(limitKey)
-      } catch (rollbackError) {
-        console.error('Usage rollback failed', {
-          ip: clientIp,
-          message: rollbackError?.message,
-          stack: rollbackError?.stack,
-        })
-      }
-    }
-
     console.error('Gemini request failed', {
       model: MODEL_NAME,
-      ip: clientIp,
       status: error?.status,
       message: error?.message,
       stack: error?.stack,
